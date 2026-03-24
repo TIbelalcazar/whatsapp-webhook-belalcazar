@@ -69,14 +69,24 @@ def webhook():
                             print("Número:", from_number)
                             print("Texto recibido:", user_text)
 
-                            if user_text in ["hola", "buenas", "buenos dias", "buen día", "quiero pedir"]:
-                                reply = (
-                                    "Hola, bienvenido(a) a Supermercados Belalcázar.\n\n"
-                                    "Estamos tomando pedidos a domicilio para nuestra tienda de Ciudad Guabinas.\n\n"
-                                    "1️⃣ Hacer pedido\n"
-                                    "2️⃣ Hablar con asesor"
-                                )
-                                send_whatsapp_text(from_number, reply)
+                        if user_text in ["hola", "buenas", "buenos dias", "buen día", "quiero pedir"]:
+                            reply = (
+                                "Hola, bienvenido(a) a Supermercados Belalcázar 👋\n\n"
+                                "Somos Supermercados Belalcázar y estamos tomando pedidos a domicilio para nuestra tienda de Ciudad Guabinas.\n\n"
+                                "Por favor escríbenos tu pedido como normalmente lo harías.\n\n"
+                                "Ejemplo:\n"
+                                "- 2 arroz\n"
+                                "- 1 aceite\n"
+                                "- 1 leche"
+                            )
+                            send_whatsapp_text(from_number, reply)
+
+else:
+    reply = (
+        "Gracias, ya recibimos tu pedido 🛒\n\n"
+        "En un momento un asesor de Supermercados Belalcázar te contactará para confirmar disponibilidad, valor y envío."
+    )
+    send_whatsapp_text(from_number, reply)
 
         except Exception as e:
             print("Error procesando webhook:", str(e))
