@@ -10,6 +10,7 @@ PHONE_NUMBER_ID = os.getenv("PHONE_NUMBER_ID", "")
 
 # Memoria temporal en RAM para el piloto
 pedidos_en_curso = {}
+clientes_en_datos = {}
 
 
 def send_whatsapp_text(to_number, message_text):
@@ -79,6 +80,7 @@ def webhook():
                         # Inicio de conversación
                         if user_text in ["hola", "buenas", "buenos dias", "buen día", "quiero pedir"]:
                             pedidos_en_curso[from_number] = []
+                            clientes_en_datos[from_number] = {"estado": "tomando_pedido"}
 
                             reply = (
                                 "Hola, bienvenido(a) a Supermercados Belalcázar 👋\n\n"
@@ -134,15 +136,73 @@ def webhook():
                             print("Cliente:", from_number)
                             print("Resumen pedido:", resumen)
 
+                            clientes_en_datos[from_number] = {
+                                "estado": "esperando_nombre",
+                                "pedido": pedido_cliente
+                            }
+
                             reply = (
                                 "Gracias, ya recibimos tu pedido 🛒\n\n"
                                 f"Resumen de tu pedido:\n{resumen}\n\n"
-                                "En un momento un asesor de Supermercados Belalcázar te contactará para confirmar disponibilidad, valor y envío."
+                                "Ahora por favor indícanos el nombre de la persona que recibirá el pedido."
+                            )
+                            send_whatsapp_text(from_number, reply)
+                            continue
+
+                                                # Captura de nombre
+                        if from_number in clientes_en_datos and clientes_en_datos[from_number].get("estado") == "esperando_nombre":
+                            clientes_en_datos[from_number]["nombre"] = original_text
+                            clientes_en_datos[from_number]["estado"] = "esperando_direccion"
+
+                            reply = (
+                                "Gracias 😊\n\n"
+                                "Ahora por favor indícanos la dirección de entrega."
+                            )
+                            send_whatsapp_text(from_number, reply)
+                            continue
+
+                        # Captura de dirección
+                        if from_number in clientes_en_datos and clientes_en_datos[from_number].get("estado") == "esperando_direccion":
+                            clientes_en_datos[from_number]["direccion"] = original_text
+                            clientes_en_datos[from_number]["estado"] = "esperando_contacto"
+
+                            reply = (
+                                "Perfecto 👍\n\n"
+                                "Ahora por favor compártenos el número de contacto para el domicilio."
+                            )
+                            send_whatsapp_text(from_number, reply)
+                            continue
+
+                        # Captura de contacto
+                        if from_number in clientes_en_datos and clientes_en_datos[from_number].get("estado") == "esperando_contacto":
+                            clientes_en_datos[from_number]["contacto"] = original_text
+
+                            pedido_cliente = clientes_en_datos[from_number].get("pedido", [])
+                            resumen = "\n".join([f"- {item}" for item in pedido_cliente])
+
+                            nombre = clientes_en_datos[from_number].get("nombre", "")
+                            direccion = clientes_en_datos[from_number].get("direccion", "")
+                            contacto = clientes_en_datos[from_number].get("contacto", "")
+
+                            print("PEDIDO COMPLETO")
+                            print("Cliente WhatsApp:", from_number)
+                            print("Nombre:", nombre)
+                            print("Dirección:", direccion)
+                            print("Contacto:", contacto)
+                            print("Resumen pedido:", resumen)
+
+                            reply = (
+                                "Gracias, ya tenemos todos los datos de tu pedido ✅\n\n"
+                                f"Nombre: {nombre}\n"
+                                f"Dirección: {direccion}\n"
+                                f"Contacto: {contacto}\n\n"
+                                f"Pedido:\n{resumen}\n\n"
+                                "En un momento un asesor de Supermercados Belalcázar revisará tu solicitud."
                             )
                             send_whatsapp_text(from_number, reply)
 
-                            # Limpiar memoria del pedido terminado
                             pedidos_en_curso.pop(from_number, None)
+                            clientes_en_datos.pop(from_number, None)
                             continue
 
                         # Agregar línea al pedido
