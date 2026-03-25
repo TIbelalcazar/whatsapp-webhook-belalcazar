@@ -197,7 +197,7 @@ def webhook():
                                 f"Dirección: {direccion}\n"
                                 f"Contacto: {contacto}\n\n"
                                 f"Pedido:\n{resumen}\n\n"
-                                "En un momento un asesor de Supermercados Belalcázar revisará tu solicitud."
+                                "🎧 En un momento un asesor de Supermercados Belalcázar revisará tu solicitud y se pondrá en contacto contigo."
                             )
                             send_whatsapp_text(from_number, reply)
 
