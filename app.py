@@ -8,6 +8,9 @@ VERIFY_TOKEN = os.getenv("VERIFY_TOKEN", "belalcazarbot")
 WHATSAPP_TOKEN = os.getenv("WHATSAPP_TOKEN", "")
 PHONE_NUMBER_ID = os.getenv("PHONE_NUMBER_ID", "")
 
+# Memoria temporal en RAM para el piloto
+pedidos_en_curso = {}
+
 
 def send_whatsapp_text(to_number, message_text):
     if not WHATSAPP_TOKEN or not PHONE_NUMBER_ID:
@@ -64,29 +67,93 @@ def webhook():
                         from_number = message.get("from", "")
                         message_type = message.get("type", "")
 
-                        if message_type == "text":
-                            user_text = message.get("text", {}).get("body", "").strip().lower()
-                            print("Número:", from_number)
-                            print("Texto recibido:", user_text)
+                        if message_type != "text":
+                            continue
 
-                            if user_text in ["hola", "buenas", "buenos dias", "buen día", "quiero pedir"]:
+                        original_text = message.get("text", {}).get("body", "").strip()
+                        user_text = original_text.lower()
+
+                        print("Número:", from_number)
+                        print("Texto recibido:", user_text)
+
+                        # Inicio de conversación
+                        if user_text in ["hola", "buenas", "buenos dias", "buen día", "quiero pedir"]:
+                            pedidos_en_curso[from_number] = []
+
+                            reply = (
+                                "Hola, bienvenido(a) a Supermercados Belalcázar 👋\n\n"
+                                "Somos Supermercados Belalcázar y estamos tomando pedidos a domicilio para nuestra tienda de Ciudad Guabinas.\n\n"
+                                "Por favor escríbenos tu pedido con la mayor claridad posible, indicando:\n"
+                                "- cantidad\n"
+                                "- unidad de medida\n"
+                                "- producto\n"
+                                "- y marca, si tienes alguna preferencia\n\n"
+                                "Ejemplos:\n"
+                                "- 1 kilo de arroz Diana\n"
+                                "- 1 litro de leche Alpina\n"
+                                "- 500 gramos de azúcar\n"
+                                "- 2 unidades de atún Van Camps\n\n"
+                                "Puedes enviarnos tu pedido en varios mensajes.\n"
+                                "Cuando termines, escribe: FIN"
+                            )
+                            send_whatsapp_text(from_number, reply)
+                            continue
+
+                        # Si el cliente no ha iniciado saludo y escribe directo
+                        if from_number not in pedidos_en_curso:
+                            pedidos_en_curso[from_number] = [original_text]
+
+                            reply = (
+                                "Hola, bienvenido(a) a Supermercados Belalcázar 👋\n\n"
+                                "Ya empezamos a tomar tu pedido 🛒\n\n"
+                                "Por favor sigue escribiéndolo con claridad, indicando:\n"
+                                "- cantidad\n"
+                                "- unidad de medida\n"
+                                "- producto\n"
+                                "- y marca, si tienes alguna preferencia\n\n"
+                                "Cuando termines, escribe: FIN"
+                            )
+                            send_whatsapp_text(from_number, reply)
+                            continue
+
+                        # Cierre del pedido
+                        if user_text in ["fin", "fin de pedido", "eso es todo", "listo", "terminé", "termine"]:
+                            pedido_cliente = pedidos_en_curso.get(from_number, [])
+
+                            if not pedido_cliente:
                                 reply = (
-                                    "Hola, bienvenido(a) a Supermercados Belalcázar 👋\n\n"
-                                    "Somos Supermercados Belalcázar y estamos tomando pedidos a domicilio para nuestra tienda de Ciudad Guabinas.\n\n"
-                                    "Por favor escríbenos tu pedido como normalmente lo harías.\n\n"
-                                    "Ejemplo:\n"
-                                    "- 2 arroz\n"
-                                    "- 1 aceite\n"
-                                    "- 1 leche"
+                                    "Aún no vemos productos en tu pedido 🛒\n\n"
+                                    "Por favor escríbenos los productos y cuando termines escribe: FIN"
                                 )
                                 send_whatsapp_text(from_number, reply)
+                                continue
 
-                            else:
-                                reply = (
-                                    "Gracias, ya recibimos tu pedido 🛒\n\n"
-                                    "En un momento un asesor de Supermercados Belalcázar te contactará para confirmar disponibilidad, valor y envío."
-                                )
-                                send_whatsapp_text(from_number, reply)
+                            resumen = "\n".join([f"- {item}" for item in pedido_cliente])
+
+                            print("PEDIDO FINALIZADO")
+                            print("Cliente:", from_number)
+                            print("Resumen pedido:", resumen)
+
+                            reply = (
+                                "Gracias, ya recibimos tu pedido 🛒\n\n"
+                                f"Resumen de tu pedido:\n{resumen}\n\n"
+                                "En un momento un asesor de Supermercados Belalcázar te contactará para confirmar disponibilidad, valor y envío."
+                            )
+                            send_whatsapp_text(from_number, reply)
+
+                            # Limpiar memoria del pedido terminado
+                            pedidos_en_curso.pop(from_number, None)
+                            continue
+
+                        # Agregar línea al pedido
+                        pedidos_en_curso[from_number].append(original_text)
+
+                        reply = (
+                            "Anotado 🛒\n\n"
+                            "Puedes seguir escribiendo tu pedido.\n"
+                            "Cuando termines, escribe: FIN"
+                        )
+                        send_whatsapp_text(from_number, reply)
 
         except Exception as e:
             print("Error procesando webhook:", str(e))
