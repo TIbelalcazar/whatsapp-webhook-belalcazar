@@ -101,7 +101,7 @@ def guardar_pedido_en_excel(whatsapp_cliente, nombre, direccion, contacto, pedid
     payload = {
         "values": [[
             fecha_hora,
-            whatsapp_cliente,
+            "'" + whatsapp_cliente,
             nombre,
             direccion,
             contacto,
