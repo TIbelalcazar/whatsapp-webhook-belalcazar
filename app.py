@@ -81,30 +81,30 @@ def get_drive_item_id(graph_token, site_id):
     return response.json()["id"]
 
 
-def construir_detalle_categoria(categorias_dict):
-    bloques = []
-    for categoria, items in categorias_dict.items():
-        if items:
-            bloques.append(f"{categoria}: " + " | ".join(items))
-    return " || ".join(bloques)
-
-
-def construir_pedido_plano(categorias_dict):
-    todos = []
-    for items in categorias_dict.values():
-        todos.extend(items)
-    return " | ".join(todos)
-
-
 def guardar_pedido_en_excel(whatsapp_cliente, nombre, direccion, contacto, categorias_dict):
     graph_token = get_graph_token()
     site_id = get_site_id(graph_token)
     item_id = get_drive_item_id(graph_token, site_id)
 
     fecha_hora = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    categorias_usadas = " | ".join([cat for cat, items in categorias_dict.items() if items])
-    detalle_categoria = construir_detalle_categoria(categorias_dict)
-    pedido_texto = construir_pedido_plano(categorias_dict)
+
+    filas = []
+    for categoria, items in categorias_dict.items():
+        if items:
+            pedido_texto = " | ".join(items)
+            filas.append([
+                fecha_hora,
+                "'" + whatsapp_cliente,
+                nombre,
+                direccion,
+                "'" + contacto,
+                categoria,
+                pedido_texto,
+                "Pendiente",
+            ])
+
+    if not filas:
+        raise Exception("No hay filas para guardar en Excel")
 
     url = (
         f"https://graph.microsoft.com/v1.0/sites/{site_id}/drive/items/"
@@ -115,19 +115,7 @@ def guardar_pedido_en_excel(whatsapp_cliente, nombre, direccion, contacto, categ
         "Content-Type": "application/json",
     }
 
-    payload = {
-        "values": [[
-            fecha_hora,
-            "'" + whatsapp_cliente,
-            nombre,
-            direccion,
-            "'" + contacto,
-            categorias_usadas,
-            detalle_categoria,
-            pedido_texto,
-            "Pendiente",
-        ]]
-    }
+    payload = {"values": filas}
 
     response = requests.post(url, headers=headers, json=payload, timeout=60)
     print("Respuesta Excel Graph:", response.status_code, response.text)
@@ -258,13 +246,11 @@ def webhook():
                                 categorias_usadas = " | ".join(
                                     [cat for cat, items in categorias_dict.items() if items]
                                 )
-                                detalle_categoria = construir_detalle_categoria(categorias_dict)
 
                                 send_whatsapp_text(
                                     from_number,
                                     "Gracias, ya recibimos tu pedido 🛒\n\n"
                                     f"Categorías: {categorias_usadas}\n\n"
-                                    f"Detalle de tu pedido:\n{detalle_categoria}\n\n"
                                     "Ahora por favor indícanos el nombre de la persona que recibirá el pedido."
                                 )
                                 continue
@@ -357,7 +343,6 @@ def webhook():
                             categorias_usadas = " | ".join(
                                 [cat for cat, items in categorias_dict.items() if items]
                             )
-                            detalle_categoria = construir_detalle_categoria(categorias_dict)
 
                             print("PEDIDO COMPLETO")
                             print("Cliente WhatsApp:", from_number)
@@ -365,7 +350,7 @@ def webhook():
                             print("Dirección:", direccion)
                             print("Contacto:", contacto)
                             print("Categorías:", categorias_usadas)
-                            print("Detalle por categoría:", detalle_categoria)
+                            print("Detalle:", categorias_dict)
 
                             try:
                                 guardar_pedido_en_excel(
@@ -383,7 +368,6 @@ def webhook():
                                     f"Dirección: {direccion}\n"
                                     f"Contacto: {contacto}\n"
                                     f"Categorías: {categorias_usadas}\n\n"
-                                    f"Detalle del pedido:\n{detalle_categoria}\n\n"
                                     "Tu pedido fue registrado correctamente y en un momento un asesor de Supermercados Belalcázar revisará tu solicitud."
                                 )
                             except Exception as e:
