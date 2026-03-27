@@ -82,29 +82,13 @@ def get_drive_item_id(graph_token, site_id):
 
 
 def guardar_pedido_en_excel(whatsapp_cliente, nombre, direccion, contacto, categorias_dict):
+    import time
+
     graph_token = get_graph_token()
     site_id = get_site_id(graph_token)
     item_id = get_drive_item_id(graph_token, site_id)
 
     fecha_hora = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-    filas = []
-    for categoria, items in categorias_dict.items():
-        if items:
-            pedido_texto = " | ".join(items)
-            filas.append([
-                fecha_hora,
-                "'" + whatsapp_cliente,
-                nombre,
-                direccion,
-                "'" + contacto,
-                categoria,
-                pedido_texto,
-                "Pendiente",
-            ])
-
-    if not filas:
-        raise Exception("No hay filas para guardar en Excel")
 
     url = (
         f"https://graph.microsoft.com/v1.0/sites/{site_id}/drive/items/"
@@ -115,11 +99,36 @@ def guardar_pedido_en_excel(whatsapp_cliente, nombre, direccion, contacto, categ
         "Content-Type": "application/json",
     }
 
-    payload = {"values": filas}
+    filas_guardadas = 0
 
-    response = requests.post(url, headers=headers, json=payload, timeout=60)
-    print("Respuesta Excel Graph:", response.status_code, response.text)
-    response.raise_for_status()
+    for categoria, items in categorias_dict.items():
+        if not items:
+            continue
+
+        pedido_texto = " | ".join(items)
+
+        payload = {
+            "values": [[
+                fecha_hora,
+                "'" + whatsapp_cliente,
+                nombre,
+                direccion,
+                "'" + contacto,
+                categoria,
+                pedido_texto,
+                "Pendiente",
+            ]]
+        }
+
+        response = requests.post(url, headers=headers, json=payload, timeout=25)
+        print("Respuesta Excel Graph:", response.status_code, response.text)
+        response.raise_for_status()
+
+        filas_guardadas += 1
+        time.sleep(1)
+
+    if filas_guardadas == 0:
+        raise Exception("No había categorías con productos para guardar")
 
 
 @app.route("/", methods=["GET"])
