@@ -20,7 +20,6 @@ SHAREPOINT_SITE_PATH = os.getenv("SHAREPOINT_SITE_PATH", "")
 EXCEL_FILE_PATH = os.getenv("EXCEL_FILE_PATH", "")
 EXCEL_TABLE_NAME = os.getenv("EXCEL_TABLE_NAME", "tblPedidos")
 
-# Memoria temporal del piloto
 pedidos_en_curso = {}
 clientes_en_datos = {}
 
@@ -82,13 +81,30 @@ def get_drive_item_id(graph_token, site_id):
     return response.json()["id"]
 
 
-def guardar_pedido_en_excel(whatsapp_cliente, nombre, direccion, contacto, pedido_lista):
+def construir_detalle_categoria(categorias_dict):
+    bloques = []
+    for categoria, items in categorias_dict.items():
+        if items:
+            bloques.append(f"{categoria}: " + " | ".join(items))
+    return " || ".join(bloques)
+
+
+def construir_pedido_plano(categorias_dict):
+    todos = []
+    for items in categorias_dict.values():
+        todos.extend(items)
+    return " | ".join(todos)
+
+
+def guardar_pedido_en_excel(whatsapp_cliente, nombre, direccion, contacto, categorias_dict):
     graph_token = get_graph_token()
     site_id = get_site_id(graph_token)
     item_id = get_drive_item_id(graph_token, site_id)
 
-    pedido_texto = " | ".join(pedido_lista)
     fecha_hora = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    categorias_usadas = " | ".join([cat for cat, items in categorias_dict.items() if items])
+    detalle_categoria = construir_detalle_categoria(categorias_dict)
+    pedido_texto = construir_pedido_plano(categorias_dict)
 
     url = (
         f"https://graph.microsoft.com/v1.0/sites/{site_id}/drive/items/"
@@ -98,13 +114,16 @@ def guardar_pedido_en_excel(whatsapp_cliente, nombre, direccion, contacto, pedid
         "Authorization": f"Bearer {graph_token}",
         "Content-Type": "application/json",
     }
+
     payload = {
         "values": [[
             fecha_hora,
             "'" + whatsapp_cliente,
             nombre,
             direccion,
-            contacto,
+            "'" + contacto,
+            categorias_usadas,
+            detalle_categoria,
             pedido_texto,
             "Pendiente",
         ]]
@@ -158,107 +177,195 @@ def webhook():
 
                         # Inicio
                         if user_text in ["hola", "buenas", "buenos dias", "buen día", "quiero pedir"]:
-                            pedidos_en_curso[from_number] = []
-                            clientes_en_datos[from_number] = {"estado": "tomando_pedido"}
+                            pedidos_en_curso[from_number] = {
+                                "Carnes": [],
+                                "Frutas y Verduras": [],
+                                "Abarrotes y Granos": [],
+                            }
+                            clientes_en_datos[from_number] = {
+                                "estado": "esperando_categoria"
+                            }
 
-                            reply = (
+                            send_whatsapp_text(
+                                from_number,
                                 "Hola, bienvenido(a) a Supermercados Belalcázar 👋\n\n"
-                                "Somos Supermercados Belalcázar y estamos tomando pedidos a domicilio para nuestra tienda de Ciudad Guabinas.\n\n"
-                                "Por favor escríbenos tu pedido con la mayor claridad posible, indicando:\n"
-                                "- cantidad\n"
-                                "- unidad de medida\n"
-                                "- producto\n"
-                                "- y marca, si tienes alguna preferencia\n\n"
-                                "Ejemplos:\n"
-                                "- 1 kilo de arroz Diana\n"
-                                "- 1 litro de leche Alpina\n"
-                                "- 500 gramos de azúcar\n"
-                                "- 2 unidades de atún Van Camps\n\n"
-                                "Puedes enviarnos tu pedido en varios mensajes.\n"
-                                "Cuando termines, escribe: FIN"
+                                "Somos Supermercados Belalcázar y estamos tomando pedidos a domicilio para nuestra tienda de Ciudad Guabinas."
                             )
-                            send_whatsapp_text(from_number, reply)
+
+                            send_whatsapp_text(
+                                from_number,
+                                "Iniciemos con tu pedido 🛒\n\n"
+                                "¿Qué deseas pedir?\n\n"
+                                "1️⃣ Carnes\n"
+                                "2️⃣ Frutas y Verduras\n"
+                                "3️⃣ Abarrotes y Granos\n"
+                                "4️⃣ Terminar pedido"
+                            )
                             continue
 
                         # Si escribe directo sin saludo
-                        if from_number not in pedidos_en_curso:
-                            pedidos_en_curso[from_number] = [original_text]
-                            clientes_en_datos[from_number] = {"estado": "tomando_pedido"}
-
-                            reply = (
-                                "Hola, bienvenido(a) a Supermercados Belalcázar 👋\n\n"
-                                "Ya empezamos a tomar tu pedido 🛒\n\n"
-                                "Por favor sigue escribiéndolo con claridad, indicando:\n"
-                                "- cantidad\n"
-                                "- unidad de medida\n"
-                                "- producto\n"
-                                "- y marca, si tienes alguna preferencia\n\n"
-                                "Cuando termines, escribe: FIN"
-                            )
-                            send_whatsapp_text(from_number, reply)
-                            continue
-
-                        # FIN del pedido
-                        if user_text in ["fin", "fin de pedido", "eso es todo", "listo", "terminé", "termine"]:
-                            pedido_cliente = pedidos_en_curso.get(from_number, [])
-
-                            if not pedido_cliente:
-                                reply = (
-                                    "Aún no vemos productos en tu pedido 🛒\n\n"
-                                    "Por favor escríbenos los productos y cuando termines escribe: FIN"
-                                )
-                                send_whatsapp_text(from_number, reply)
-                                continue
-
-                            resumen = "\n".join([f"- {item}" for item in pedido_cliente])
-
+                        if from_number not in clientes_en_datos:
+                            pedidos_en_curso[from_number] = {
+                                "Carnes": [],
+                                "Frutas y Verduras": [],
+                                "Abarrotes y Granos": [],
+                            }
                             clientes_en_datos[from_number] = {
-                                "estado": "esperando_nombre",
-                                "pedido": pedido_cliente,
+                                "estado": "esperando_categoria"
                             }
 
-                            reply = (
-                                "Gracias, ya recibimos tu pedido 🛒\n\n"
-                                f"Resumen de tu pedido:\n{resumen}\n\n"
-                                "Ahora por favor indícanos el nombre de la persona que recibirá el pedido."
+                            send_whatsapp_text(
+                                from_number,
+                                "Hola, bienvenido(a) a Supermercados Belalcázar 👋\n\n"
+                                "Iniciemos con tu pedido 🛒\n\n"
+                                "¿Qué deseas pedir?\n\n"
+                                "1️⃣ Carnes\n"
+                                "2️⃣ Frutas y Verduras\n"
+                                "3️⃣ Abarrotes y Granos\n"
+                                "4️⃣ Terminar pedido"
                             )
-                            send_whatsapp_text(from_number, reply)
+                            continue
+
+                        estado_actual = clientes_en_datos[from_number].get("estado")
+
+                        # Elegir categoría o terminar pedido
+                        if estado_actual == "esperando_categoria":
+                            categoria = None
+
+                            if user_text in ["1", "carnes", "carne"]:
+                                categoria = "Carnes"
+                            elif user_text in ["2", "frutas y verduras", "frutas", "verduras"]:
+                                categoria = "Frutas y Verduras"
+                            elif user_text in ["3", "abarrotes y granos", "abarrotes", "granos"]:
+                                categoria = "Abarrotes y Granos"
+                            elif user_text in ["4", "terminar pedido", "terminar"]:
+                                categorias_dict = pedidos_en_curso.get(from_number, {})
+                                hay_productos = any(categorias_dict.get(cat) for cat in categorias_dict)
+
+                                if not hay_productos:
+                                    send_whatsapp_text(
+                                        from_number,
+                                        "Aún no vemos productos en tu pedido 🛒\n\n"
+                                        "Por favor elige una categoría:\n\n"
+                                        "1️⃣ Carnes\n"
+                                        "2️⃣ Frutas y Verduras\n"
+                                        "3️⃣ Abarrotes y Granos"
+                                    )
+                                    continue
+
+                                clientes_en_datos[from_number]["estado"] = "esperando_nombre"
+
+                                categorias_usadas = " | ".join(
+                                    [cat for cat, items in categorias_dict.items() if items]
+                                )
+                                detalle_categoria = construir_detalle_categoria(categorias_dict)
+
+                                send_whatsapp_text(
+                                    from_number,
+                                    "Gracias, ya recibimos tu pedido 🛒\n\n"
+                                    f"Categorías: {categorias_usadas}\n\n"
+                                    f"Detalle de tu pedido:\n{detalle_categoria}\n\n"
+                                    "Ahora por favor indícanos el nombre de la persona que recibirá el pedido."
+                                )
+                                continue
+
+                            if not categoria:
+                                send_whatsapp_text(
+                                    from_number,
+                                    "Por favor elige una opción válida:\n\n"
+                                    "1️⃣ Carnes\n"
+                                    "2️⃣ Frutas y Verduras\n"
+                                    "3️⃣ Abarrotes y Granos\n"
+                                    "4️⃣ Terminar pedido"
+                                )
+                                continue
+
+                            clientes_en_datos[from_number]["estado"] = "tomando_pedido_categoria"
+                            clientes_en_datos[from_number]["categoria_actual"] = categoria
+
+                            send_whatsapp_text(
+                                from_number,
+                                f"Perfecto 👍\n\n"
+                                f"Estás en la categoría: {categoria}\n\n"
+                                "Ahora escríbenos los productos de esta categoría.\n"
+                                "Cuando termines esta categoría, escribe: FIN"
+                            )
+                            continue
+
+                        # Tomando pedido de una categoría
+                        if estado_actual == "tomando_pedido_categoria":
+                            if user_text in ["fin", "fin de categoria", "fin categoría", "terminé", "termine", "listo"]:
+                                clientes_en_datos[from_number]["estado"] = "esperando_categoria"
+                                clientes_en_datos[from_number]["categoria_actual"] = ""
+
+                                send_whatsapp_text(
+                                    from_number,
+                                    "Muy bien ✅\n\n"
+                                    "¿Deseas agregar productos de otra categoría?\n\n"
+                                    "1️⃣ Carnes\n"
+                                    "2️⃣ Frutas y Verduras\n"
+                                    "3️⃣ Abarrotes y Granos\n"
+                                    "4️⃣ Terminar pedido"
+                                )
+                                continue
+
+                            categoria_actual = clientes_en_datos[from_number].get("categoria_actual", "")
+                            if categoria_actual:
+                                pedidos_en_curso[from_number][categoria_actual].append(original_text)
+
+                            send_whatsapp_text(
+                                from_number,
+                                "Anotado 🛒\n\n"
+                                "Puedes seguir escribiendo productos de esta categoría.\n"
+                                "Cuando termines esta categoría, escribe: FIN"
+                            )
                             continue
 
                         # Nombre
-                        if from_number in clientes_en_datos and clientes_en_datos[from_number].get("estado") == "esperando_nombre":
+                        if estado_actual == "esperando_nombre":
                             clientes_en_datos[from_number]["nombre"] = original_text
                             clientes_en_datos[from_number]["estado"] = "esperando_direccion"
 
-                            reply = "Gracias 😊\n\nAhora por favor indícanos la dirección de entrega."
-                            send_whatsapp_text(from_number, reply)
+                            send_whatsapp_text(
+                                from_number,
+                                "Gracias 😊\n\n"
+                                "Ahora por favor indícanos la dirección de entrega."
+                            )
                             continue
 
                         # Dirección
-                        if from_number in clientes_en_datos and clientes_en_datos[from_number].get("estado") == "esperando_direccion":
+                        if estado_actual == "esperando_direccion":
                             clientes_en_datos[from_number]["direccion"] = original_text
                             clientes_en_datos[from_number]["estado"] = "esperando_contacto"
 
-                            reply = "Perfecto 👍\n\nAhora por favor compártenos el número de contacto para el domicilio."
-                            send_whatsapp_text(from_number, reply)
+                            send_whatsapp_text(
+                                from_number,
+                                "Perfecto 👍\n\n"
+                                "Ahora por favor compártenos el número de contacto para el domicilio."
+                            )
                             continue
 
                         # Contacto y guardado en Excel
-                        if from_number in clientes_en_datos and clientes_en_datos[from_number].get("estado") == "esperando_contacto":
+                        if estado_actual == "esperando_contacto":
                             clientes_en_datos[from_number]["contacto"] = original_text
 
-                            pedido_cliente = clientes_en_datos[from_number].get("pedido", [])
+                            categorias_dict = pedidos_en_curso.get(from_number, {})
                             nombre = clientes_en_datos[from_number].get("nombre", "")
                             direccion = clientes_en_datos[from_number].get("direccion", "")
                             contacto = clientes_en_datos[from_number].get("contacto", "")
-                            resumen = "\n".join([f"- {item}" for item in pedido_cliente])
+
+                            categorias_usadas = " | ".join(
+                                [cat for cat, items in categorias_dict.items() if items]
+                            )
+                            detalle_categoria = construir_detalle_categoria(categorias_dict)
 
                             print("PEDIDO COMPLETO")
                             print("Cliente WhatsApp:", from_number)
                             print("Nombre:", nombre)
                             print("Dirección:", direccion)
                             print("Contacto:", contacto)
-                            print("Resumen pedido:", resumen)
+                            print("Categorías:", categorias_usadas)
+                            print("Detalle por categoría:", detalle_categoria)
 
                             try:
                                 guardar_pedido_en_excel(
@@ -266,39 +373,31 @@ def webhook():
                                     nombre=nombre,
                                     direccion=direccion,
                                     contacto=contacto,
-                                    pedido_lista=pedido_cliente,
+                                    categorias_dict=categorias_dict,
                                 )
 
-                                reply = (
+                                send_whatsapp_text(
+                                    from_number,
                                     "Gracias, ya tenemos todos los datos de tu pedido ✅\n\n"
                                     f"Nombre: {nombre}\n"
                                     f"Dirección: {direccion}\n"
-                                    f"Contacto: {contacto}\n\n"
-                                    f"Pedido:\n{resumen}\n\n"
+                                    f"Contacto: {contacto}\n"
+                                    f"Categorías: {categorias_usadas}\n\n"
+                                    f"Detalle del pedido:\n{detalle_categoria}\n\n"
                                     "Tu pedido fue registrado correctamente y en un momento un asesor de Supermercados Belalcázar revisará tu solicitud."
                                 )
                             except Exception as e:
                                 print("Error guardando en Excel:", str(e))
-                                reply = (
+                                send_whatsapp_text(
+                                    from_number,
                                     "Ya tenemos todos los datos de tu pedido ✅\n\n"
                                     "Sin embargo, tuvimos un problema registrándolo internamente en este momento.\n"
                                     "Un asesor de Supermercados Belalcázar revisará tu solicitud manualmente."
                                 )
 
-                            send_whatsapp_text(from_number, reply)
-
                             pedidos_en_curso.pop(from_number, None)
                             clientes_en_datos.pop(from_number, None)
                             continue
-
-                        # Agregar línea al pedido
-                        pedidos_en_curso[from_number].append(original_text)
-                        reply = (
-                            "Anotado 🛒\n\n"
-                            "Puedes seguir escribiendo tu pedido.\n"
-                            "Cuando termines, escribe: FIN"
-                        )
-                        send_whatsapp_text(from_number, reply)
 
         except Exception as e:
             print("Error procesando webhook:", str(e))
