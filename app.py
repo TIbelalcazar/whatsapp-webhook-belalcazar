@@ -186,7 +186,7 @@ def webhook():
                             send_whatsapp_text(
                                 from_number,
                                 "Hola, bienvenido(a) a Supermercados Belalcázar 👋\n\n"
-                                "Somos Supermercados Belalcázar y estamos tomando pedidos a domicilio para nuestra tienda de Ciudad Guabinas."
+                                "Estamos tomando pedidos para nuestra tienda de Ciudad Guabinas."
                             )
 
                             send_whatsapp_text(
@@ -243,7 +243,7 @@ def webhook():
                                     send_whatsapp_text(
                                         from_number,
                                         "Aún no vemos productos en tu pedido 🛒\n\n"
-                                        "Por favor elige una categoría:\n\n"
+                                        "Por favor elige un grupo de productos:\n\n"
                                         "1️⃣ Carnes\n"
                                         "2️⃣ Frutas y Verduras\n"
                                         "3️⃣ Abarrotes y Granos"
@@ -281,9 +281,9 @@ def webhook():
                             send_whatsapp_text(
                                 from_number,
                                 f"Perfecto 👍\n\n"
-                                f"Estás en la categoría: {categoria}\n\n"
-                                "Ahora escríbenos los productos de esta categoría.\n"
-                                "Cuando termines esta categoría, escribe: FIN"
+                                f"Estás en el grupo: {categoria}\n\n"
+                                "Ahora escríbenos los productos de este grupo.\n"
+                                "Cuando termines este grupo, escribe: FIN"
                             )
                             continue
 
@@ -296,7 +296,7 @@ def webhook():
                                 send_whatsapp_text(
                                     from_number,
                                     "Muy bien ✅\n\n"
-                                    "¿Deseas agregar productos de otra categoría?\n\n"
+                                    "¿Deseas agregar productos de otro grupo?\n\n"
                                     "1️⃣ Carnes\n"
                                     "2️⃣ Frutas y Verduras\n"
                                     "3️⃣ Abarrotes y Granos\n"
@@ -311,7 +311,7 @@ def webhook():
                             send_whatsapp_text(
                                 from_number,
                                 "Anotado 🛒\n\n"
-                                "Puedes seguir escribiendo productos de esta categoría.\n"
+                                "Puedes seguir escribiendo productos de este grupo.\n"
                                 "Cuando termines esta categoría, escribe: FIN"
                             )
                             continue
@@ -336,7 +336,7 @@ def webhook():
                             send_whatsapp_text(
                                 from_number,
                                 "Perfecto 👍\n\n"
-                                "Ahora por favor compártenos el número de contacto para el domicilio."
+                                "Ahora por favor compártenos el número al que podemos contactarte."
                             )
                             continue
 
